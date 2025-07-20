@@ -3,6 +3,7 @@ name: Android CI
 on:
   push:
     branches:
+      - media_scan
       - dev
       - master
     tags:

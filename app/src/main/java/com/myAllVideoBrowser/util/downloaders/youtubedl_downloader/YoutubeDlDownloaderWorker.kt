@@ -363,7 +363,7 @@ class YoutubeDlDownloaderWorker(appContext: Context, workerParams: WorkerParamet
             request.addOption("--recode-video", "mp4")
             request.addOption("--merge-output-format", "mp4")
         }
-
+        request.addOption("--embed-metadata")
 
         // any another downloader has issues
         request.addOption("--hls-prefer-native")
@@ -611,6 +611,8 @@ class YoutubeDlDownloaderWorker(appContext: Context, workerParams: WorkerParamet
             taskId, line = LineInfo(taskId, 0.0, 0.0, sourceLine = item.errorMessage ?: ""), item
         ).blockingFirst(Unit)
         setDone()
+
+        FileUtil.scanFile(applicationContext, File(item.filePath))
 
         try {
             if (item.taskState == VideoTaskState.ERROR) {

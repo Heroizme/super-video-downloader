@@ -5,6 +5,7 @@ import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -47,6 +48,16 @@ class FileUtil @Inject constructor() {
 
         // 10MB
         private const val FREE_SPACE_TRESHOLD = 10 * 1024 * 1024
+
+        fun scanFile(context: Context, file: File) {
+            MediaScannerConnection.scanFile(
+                context,
+                arrayOf(file.absolutePath),
+                null
+            ) { path, uri ->
+                AppLogger.d("Media scanned: $path, uri: $uri")
+            }
+        }
 
         fun getFileSizeReadable(length: Double): String {
 

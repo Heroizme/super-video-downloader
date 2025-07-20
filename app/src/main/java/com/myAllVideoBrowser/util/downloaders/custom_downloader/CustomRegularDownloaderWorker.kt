@@ -5,6 +5,7 @@ import android.util.Base64
 import androidx.core.net.toUri
 import androidx.work.WorkerParameters
 import com.myAllVideoBrowser.util.AppLogger
+import com.myAllVideoBrowser.util.FileUtil
 import com.myAllVideoBrowser.util.downloaders.generic_downloader.GenericDownloader
 import com.myAllVideoBrowser.util.downloaders.generic_downloader.models.VideoTaskItem
 import com.myAllVideoBrowser.util.downloaders.generic_downloader.models.VideoTaskState
@@ -113,6 +114,7 @@ class CustomRegularDownloaderWorker(appContext: Context, workerParams: WorkerPar
             } else {
                 Result.success()
             }
+            FileUtil.scanFile(applicationContext, File(item.filePath))
             getContinuation().resume(result)
         } catch (e: Throwable) {
             AppLogger.d("FINISHING UNEXPECTED ERROR  $item  $e")
