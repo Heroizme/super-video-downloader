@@ -1,0 +1,109 @@
+name: 🔁 Auto Sync upstream Releases
+
+on:
+  schedule:
+    - cron: '0 2 * * *'      # 每天 UTC 2:00（北京时间 10:00）
+  workflow_dispatch:         # 可手动触发
+
+permissions:
+  contents: write            # 创建 Release 需要写权限
+
+jobs:
+  sync_releases:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (for context)
+        uses: actions/checkout@v3
+
+      - name: Install node-fetch polyfill
+        run: npm install node-fetch@2
+
+      - name: Sync Releases from upstream
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fetch = require('node-fetch');  // 用于下载二进制附件
+
+            // 获取当前仓库信息，自动识别 upstream
+            const repoInfo = await github.rest.repos.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+
+            if (!repoInfo.data.fork || !repoInfo.data.parent) {
+              throw new Error('❌ 当前仓库不是 Fork 仓库，无法自动识别 upstream。\n请手动设置 upstreamOwner 和 upstreamRepo。');
+            }
+
+            const upstreamOwner = repoInfo.data.parent.owner.login;
+            const upstreamRepo  = repoInfo.data.parent.name;
+            const myOwner       = context.repo.owner;
+            const myRepo        = context.repo.repo;
+
+            console.log(`🔍 Upstream detected: ${upstreamOwner}/${upstreamRepo}`);
+
+            // 获取上游所有 releases
+            const upstreamReleases = await github.rest.repos.listReleases({
+              owner: upstreamOwner,
+              repo: upstreamRepo,
+              per_page: 100
+            });
+
+            for (const rel of upstreamReleases.data) {
+              // 检查本地是否已有该 release
+              let exists = true;
+              try {
+                await github.rest.repos.getReleaseByTag({
+                  owner: myOwner,
+                  repo: myRepo,
+                  tag: rel.tag_name
+                });
+              } catch {
+                exists = false;
+              }
+
+              if (!exists) {
+                // 创建 release
+                const created = await github.rest.repos.createRelease({
+                  owner: myOwner,
+                  repo: myRepo,
+                  tag_name: rel.tag_name,
+                  name: rel.name,
+                  body: rel.body,
+                  draft: rel.draft,
+                  prerelease: rel.prerelease
+                });
+                console.log(`✅ Created release ${rel.tag_name}`);
+
+                // 下载并上传每个附件
+                const assets = await github.rest.repos.listReleaseAssets({
+                  owner: upstreamOwner,
+                  repo: upstreamRepo,
+                  release_id: rel.id
+                });
+
+                for (const asset of assets.data) {
+                  const response = await fetch(asset.url, {
+                    headers: {
+                      accept: 'application/octet-stream',
+                      'user-agent': 'github-script'
+                    }
+                  });
+
+                  const arrayBuffer = await response.arrayBuffer();
+
+                  await github.rest.repos.uploadReleaseAsset({
+                    owner: myOwner,
+                    repo: myRepo,
+                    release_id: created.data.id,
+                    name: asset.name,
+                    data: Buffer.from(arrayBuffer)
+                  });
+
+                  console.log(`  + 🗂️  Synced asset: ${asset.name}`);
+                }
+              } else {
+                console.log(`⏭️ Release ${rel.tag_name} already exists, skipping.`);
+              }
+            }
